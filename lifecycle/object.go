@@ -3,13 +3,29 @@ package lifecycle
 import (
 	"fmt"
 	"reflect"
+	"slices"
+	"strings"
 
 	"github.com/rancher/norman/objectclient"
 	"github.com/rancher/norman/types/slice"
+	"github.com/sirupsen/logrus"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 )
+
+// DisallowEntry configures the lifecycle not to write to specific named
+// resources in the background.
+type DisallowEntry struct {
+	Kind string
+	Name string
+}
+
+// Configuring this with namespaces will prevent them being written to.
+//
+// This is done with a prefix-match so for example gke- will prevent any
+// object starting with gke- being updated.
+var DisallowedEntries = []DisallowEntry{}
 
 var (
 	created            = "lifecycle.cattle.io/create"
@@ -235,6 +251,10 @@ func (o *objectLifecycleAdapter) setInitialized(obj runtime.Object) (runtime.Obj
 	if err != nil {
 		return nil, err
 	}
+	if name, kind := metadata.GetName(), obj.GetObjectKind().GroupVersionKind().Kind; isDisallowed(name, kind) {
+		logrus.Infof("objectLifecycleAdapter.setInitialized disallowed update to %s %s", kind, name)
+		return nil, nil
+	}
 
 	initialized := o.createKey()
 
@@ -269,4 +289,10 @@ func (o *objectLifecycleAdapter) addFinalizer(obj runtime.Object) (runtime.Objec
 
 	metadata.SetFinalizers(append(metadata.GetFinalizers(), o.constructFinalizerKey()))
 	return o.objectClient.Update(metadata.GetName(), obj)
+}
+
+func isDisallowed(name, kind string) bool {
+	return slices.ContainsFunc(DisallowedEntries, func(de DisallowEntry) bool {
+		return strings.HasPrefix(name, de.Name) && de.Kind == kind
+	})
 }
