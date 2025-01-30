@@ -243,7 +243,12 @@ func (o *objectLifecycleAdapter) setInitialized(obj runtime.Object) (runtime.Obj
 	}
 	metadata.GetAnnotations()[initialized] = "true"
 
-	return o.objectClient.Update(metadata.GetName(), obj)
+	updated, err := o.objectClient.Update(metadata.GetName(), obj)
+	if err != nil {
+		return nil, fmt.Errorf("updating lifecycle annotation %s: %w", initialized, err)
+	}
+
+	return updated, err
 }
 
 func (o *objectLifecycleAdapter) addFinalizer(obj runtime.Object) (runtime.Object, error) {
