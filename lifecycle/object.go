@@ -71,6 +71,16 @@ func (o *objectLifecycleAdapter) sync(key string, in interface{}) (interface{}, 
 		return nil, nil
 	}
 
+	metadata, err := meta.Accessor(obj)
+	if err != nil {
+		return nil, err
+	}
+
+	if name, kind := metadata.GetName(), obj.GetObjectKind().GroupVersionKind().Kind; isDisallowed(name, kind) {
+		logrus.Infof("objectLifecycleAdapter.sync disallowed update to %s %s", kind, name)
+		return nil, nil
+	}
+
 	if newObj, cont, err := o.finalize(obj); err != nil || !cont {
 		return nil, err
 	} else if newObj != nil {
@@ -250,10 +260,6 @@ func (o *objectLifecycleAdapter) setInitialized(obj runtime.Object) (runtime.Obj
 	metadata, err := meta.Accessor(obj)
 	if err != nil {
 		return nil, err
-	}
-	if name, kind := metadata.GetName(), obj.GetObjectKind().GroupVersionKind().Kind; isDisallowed(name, kind) {
-		logrus.Infof("objectLifecycleAdapter.setInitialized disallowed update to %s %s", kind, name)
-		return nil, nil
 	}
 
 	initialized := o.createKey()
