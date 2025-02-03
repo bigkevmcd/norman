@@ -11,15 +11,17 @@ import (
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
-// Configuring this with namespaces will prevent them being written to.
+// Controllers should check to see if something they want to modify is in a
+// namespace that is disallowed.
 //
 // This is done with a prefix-match so for example gke- will prevent any
 // objecting being modified in a namespace beginning with gke-.
 var DisallowedNamespaces []string
 
-// IsDisallowedNamespace returns true if the resource is in a "disallowed
+// IsDisallowedGVK returns true if the resource is a "disallowed
 // namespace" i.e. that the namespace should not be written to.
 func IsDisallowedNamespace(obj runtime.Object) bool {
 	objNS := objectNamespace(obj)
@@ -29,10 +31,24 @@ func IsDisallowedNamespace(obj runtime.Object) bool {
 	})
 }
 
-var (
-	created            = "lifecycle.cattle.io/create"
-	finalizerKey       = "controller.cattle.io/"
-	ScopedFinalizerKey = "clusterscoped.controller.cattle.io/"
+// Controllers should check to see if something they want to modify is in this
+// list of disallowed GVKs.
+var DisallowedGVKs []schema.GroupVersionKind
+
+// IsDisallowedGVK returns true if the resource GVK is listed in the
+// disallowed set.
+func IsDisallowedGVK(obj runtime.Object) bool {
+	objGVK := obj.GetObjectKind().GroupVersionKind()
+
+	return slices.ContainsFunc(DisallowedGVKs, func(gvk schema.GroupVersionKind) bool {
+		return objGVK.String() == gvk.String()
+	})
+}
+
+const (
+	created            string = "lifecycle.cattle.io/create"
+	finalizerKey       string = "controller.cattle.io/"
+	ScopedFinalizerKey string = "clusterscoped.controller.cattle.io/"
 )
 
 type ObjectLifecycle interface {

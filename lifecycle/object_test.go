@@ -6,6 +6,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
 func TestIsDisallowedNamespace(t *testing.T) {
@@ -90,6 +91,57 @@ func TestIsDisallowedNamespace(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			if v := IsDisallowedNamespace(tt.obj); v != tt.want {
 				t.Errorf("IsDisallowedNamespace() got %v, want %v", v, tt.want)
+			}
+		})
+	}
+}
+
+func TestIsDisallowedResource(t *testing.T) {
+	disallowedTests := map[string]struct {
+		obj  runtime.Object
+		want bool
+	}{
+		"resource is a disallowed resource": {
+			obj: &corev1.Node{
+				TypeMeta: metav1.TypeMeta{
+					APIVersion: "v1",
+					Kind:       "Node",
+				},
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "localhost.localdomain",
+				},
+			},
+			want: true,
+		},
+		"resource is not a disallowed resource": {
+			obj: &corev1.Namespace{
+				TypeMeta: metav1.TypeMeta{
+					APIVersion: "v1",
+					Kind:       "Namespace",
+				},
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "allowed-ns",
+				},
+			},
+			want: false,
+		},
+	}
+
+	origKinds := DisallowedGVKs
+	t.Cleanup(func() {
+		DisallowedGVKs = origKinds
+	})
+	DisallowedGVKs = []schema.GroupVersionKind{
+		{
+			Group:   "",
+			Version: "v1",
+			Kind:    "Node",
+		},
+	}
+	for name, tt := range disallowedTests {
+		t.Run(name, func(t *testing.T) {
+			if v := IsDisallowedGVK(tt.obj); v != tt.want {
+				t.Errorf("IsDisallowedGVK() got %v, want %v", v, tt.want)
 			}
 		})
 	}
