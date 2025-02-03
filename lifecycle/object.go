@@ -4,28 +4,30 @@ import (
 	"fmt"
 	"reflect"
 	"slices"
-	"strings"
 
 	"github.com/rancher/norman/objectclient"
 	"github.com/rancher/norman/types/slice"
-	"github.com/sirupsen/logrus"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 )
 
-// DisallowEntry configures the lifecycle not to write to specific named
-// resources in the background.
-type DisallowEntry struct {
-	Kind string
-	Name string
-}
-
 // Configuring this with namespaces will prevent them being written to.
 //
 // This is done with a prefix-match so for example gke- will prevent any
-// object starting with gke- being updated.
-var DisallowedEntries = []DisallowEntry{}
+// objecting being modified in a namespace beginning with gke-.
+var DisallowedNamespaces []string
+
+// IsDisallowedNamespace returns true if the resource is in a "disallowed
+// namespace" i.e. that the resource should not be written to.
+func IsDisallowedNamespace(obj runtime.Object) (bool, error) {
+	ns, err := objectNamespace(obj)
+	if err != nil {
+		return false, err
+	}
+
+	return slices.Contains(DisallowedNamespaces, ns), nil
+}
 
 var (
 	created            = "lifecycle.cattle.io/create"
@@ -71,14 +73,12 @@ func (o *objectLifecycleAdapter) sync(key string, in interface{}) (interface{}, 
 		return nil, nil
 	}
 
-	metadata, err := meta.Accessor(obj)
+	disallowed, err := IsDisallowedNamespace(obj)
 	if err != nil {
 		return nil, err
 	}
-
-	if name, kind := metadata.GetName(), obj.GetObjectKind().GroupVersionKind().Kind; isDisallowed(name, kind) {
-		logrus.Infof("objectLifecycleAdapter.sync disallowed update to %s %s", kind, name)
-		return nil, nil
+	if disallowed {
+		return obj, nil
 	}
 
 	if newObj, cont, err := o.finalize(obj); err != nil || !cont {
@@ -297,8 +297,15 @@ func (o *objectLifecycleAdapter) addFinalizer(obj runtime.Object) (runtime.Objec
 	return o.objectClient.Update(metadata.GetName(), obj)
 }
 
-func isDisallowed(name, kind string) bool {
-	return slices.ContainsFunc(DisallowedEntries, func(de DisallowEntry) bool {
-		return strings.HasPrefix(name, de.Name) && de.Kind == kind
-	})
+func objectNamespace(obj runtime.Object) (string, error) {
+	metadata, err := meta.Accessor(obj)
+	if err != nil {
+		return "", err
+	}
+
+	if obj.GetObjectKind().GroupVersionKind().Kind == "Namespace" {
+		return metadata.GetName(), nil
+	}
+
+	return metadata.GetNamespace(), nil
 }
