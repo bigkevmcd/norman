@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"reflect"
 	"slices"
+	"strings"
 
 	"github.com/rancher/norman/objectclient"
 	"github.com/rancher/norman/types/slice"
@@ -19,14 +20,13 @@ import (
 var DisallowedNamespaces []string
 
 // IsDisallowedNamespace returns true if the resource is in a "disallowed
-// namespace" i.e. that the resource should not be written to.
-func IsDisallowedNamespace(obj runtime.Object) (bool, error) {
-	ns, err := objectNamespace(obj)
-	if err != nil {
-		return false, err
-	}
+// namespace" i.e. that the namespace should not be written to.
+func IsDisallowedNamespace(obj runtime.Object) bool {
+	objNS := objectNamespace(obj)
 
-	return slices.Contains(DisallowedNamespaces, ns), nil
+	return objNS == "" || slices.ContainsFunc(DisallowedNamespaces, func(s string) bool {
+		return strings.HasPrefix(objNS, s)
+	})
 }
 
 var (
@@ -73,11 +73,7 @@ func (o *objectLifecycleAdapter) sync(key string, in interface{}) (interface{}, 
 		return nil, nil
 	}
 
-	disallowed, err := IsDisallowedNamespace(obj)
-	if err != nil {
-		return nil, err
-	}
-	if disallowed {
+	if IsDisallowedNamespace(obj) {
 		return obj, nil
 	}
 
@@ -297,15 +293,17 @@ func (o *objectLifecycleAdapter) addFinalizer(obj runtime.Object) (runtime.Objec
 	return o.objectClient.Update(metadata.GetName(), obj)
 }
 
-func objectNamespace(obj runtime.Object) (string, error) {
+func objectNamespace(obj runtime.Object) string {
 	metadata, err := meta.Accessor(obj)
+	// This ignores errors...it's not clear how a resource could be passed in
+	// that wasn't convertible.
 	if err != nil {
-		return "", err
+		return ""
 	}
 
 	if obj.GetObjectKind().GroupVersionKind().Kind == "Namespace" {
-		return metadata.GetName(), nil
+		return metadata.GetName()
 	}
 
-	return metadata.GetNamespace(), nil
+	return metadata.GetNamespace()
 }
