@@ -11,8 +11,9 @@ import (
 
 func TestIsDisallowedNamespace(t *testing.T) {
 	disallowedTests := map[string]struct {
-		obj  runtime.Object
-		want bool
+		disallowedNamespaces []string
+		obj                  runtime.Object
+		want                 bool
 	}{
 		"resource is a disallowed namespace": {
 			obj: &corev1.Namespace{
@@ -25,6 +26,10 @@ func TestIsDisallowedNamespace(t *testing.T) {
 				},
 			},
 			want: true,
+			disallowedNamespaces: []string{
+				"disallowed-ns",
+				"disallowed-prefix-",
+			},
 		},
 		"resource is not a disallowed namespace": {
 			obj: &corev1.Namespace{
@@ -37,6 +42,10 @@ func TestIsDisallowedNamespace(t *testing.T) {
 				},
 			},
 			want: false,
+			disallowedNamespaces: []string{
+				"disallowed-ns",
+				"disallowed-prefix-",
+			},
 		},
 		"resource is a disallowed prefix namespace": {
 			obj: &corev1.Namespace{
@@ -49,6 +58,10 @@ func TestIsDisallowedNamespace(t *testing.T) {
 				},
 			},
 			want: true,
+			disallowedNamespaces: []string{
+				"disallowed-ns",
+				"disallowed-prefix-",
+			},
 		},
 		"resource is a resource in a disallowed namespace": {
 			obj: &corev1.ConfigMap{
@@ -62,6 +75,10 @@ func TestIsDisallowedNamespace(t *testing.T) {
 				},
 			},
 			want: true,
+			disallowedNamespaces: []string{
+				"disallowed-ns",
+				"disallowed-prefix-",
+			},
 		},
 		"resource is a resource in an allowed namespace": {
 			obj: &corev1.ConfigMap{
@@ -75,20 +92,47 @@ func TestIsDisallowedNamespace(t *testing.T) {
 				},
 			},
 			want: false,
+			disallowedNamespaces: []string{
+				"disallowed-ns",
+				"disallowed-prefix-",
+			},
 		},
-	}
-
-	origNamespaces := DisallowedNamespaces
-	t.Cleanup(func() {
-		DisallowedNamespaces = origNamespaces
-	})
-	DisallowedNamespaces = []string{
-		"disallowed-ns",
-		"disallowed-prefix-",
+		"resource when no namespaces are disallowed": {
+			obj: &corev1.ConfigMap{
+				TypeMeta: metav1.TypeMeta{
+					APIVersion: "v1",
+					Kind:       "ConfigMap",
+				},
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-configmap",
+					Namespace: "allowed-ns",
+				},
+			},
+			want: false,
+		},
+		"namespace when no namespaces are disallowed": {
+			obj: &corev1.Namespace{
+				TypeMeta: metav1.TypeMeta{
+					APIVersion: "v1",
+					Kind:       "Namespace",
+				},
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "test-ns",
+				},
+			},
+			want: false,
+		},
 	}
 
 	for name, tt := range disallowedTests {
 		t.Run(name, func(t *testing.T) {
+			if tt.disallowedNamespaces != nil {
+				origNamespaces := DisallowedNamespaces
+				t.Cleanup(func() {
+					DisallowedNamespaces = origNamespaces
+				})
+				DisallowedNamespaces = tt.disallowedNamespaces
+			}
 			if v := IsDisallowedNamespace(tt.obj); v != tt.want {
 				t.Errorf("IsDisallowedNamespace() got %v, want %v", v, tt.want)
 			}
