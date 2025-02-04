@@ -47,6 +47,23 @@ func TestIsDisallowedNamespace(t *testing.T) {
 				"disallowed-prefix-",
 			},
 		},
+		"resource with no namespace": {
+			obj: &corev1.Node{
+				TypeMeta: metav1.TypeMeta{
+					APIVersion: "v1",
+					Kind:       "Node",
+				},
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "test-node",
+				},
+			},
+			want: false,
+			disallowedNamespaces: []string{
+				"disallowed-ns",
+				"disallowed-prefix-",
+			},
+		},
+
 		"resource is a disallowed prefix namespace": {
 			obj: &corev1.Namespace{
 				TypeMeta: metav1.TypeMeta{

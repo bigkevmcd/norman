@@ -25,8 +25,11 @@ var DisallowedNamespaces []string
 // namespace" i.e. that the namespace should not be written to.
 func IsDisallowedNamespace(obj runtime.Object) bool {
 	objNS := objectNamespace(obj)
+	if objNS == "" {
+		return false
+	}
 
-	return objNS == "" || slices.ContainsFunc(DisallowedNamespaces, func(s string) bool {
+	return slices.ContainsFunc(DisallowedNamespaces, func(s string) bool {
 		return strings.HasPrefix(objNS, s)
 	})
 }
