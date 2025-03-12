@@ -3,6 +3,7 @@ package builder
 import (
 	"errors"
 	"fmt"
+	"log"
 	"strings"
 
 	"github.com/rancher/norman/httperror"
@@ -120,9 +121,11 @@ func (b *Builder) copyInputs(schema *types.Schema, input map[string]interface{},
 }
 
 func (b *Builder) checkDefaultAndRequired(schema *types.Schema, input map[string]interface{}, op Operation, result map[string]interface{}) error {
+	log.Printf("KEVIN!!! checkDefaultAndRequired with %#v and %#v and %v", schema, input, op)
 	for fieldName, field := range schema.ResourceFields {
 		val, hasKey := result[fieldName]
 		if op == Create && (!hasKey || val == "") && field.Default != nil {
+			log.Printf("KEVIN!!! defaulting fieldName %v to %v", fieldName, field.Default)
 			result[fieldName] = field.Default
 		}
 
